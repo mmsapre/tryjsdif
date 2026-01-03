@@ -1,0 +1,51 @@
+import java.time.Instant;
+
+public final class AuditMapper {
+
+  public static AuditRecord toAudit(JsonMerkleDiff.Result r) {
+    AuditRecord a = new AuditRecord();
+
+    a.auditType = "JSON_MERKLE_DIFF";
+    a.timestamp = Instant.now();
+
+    a.hashes = new AuditRecord.Hashes();
+    a.hashes.oldRootHash = r.oldRootHash;
+    a.hashes.newRootHash = r.newRootHash;
+
+    a.changes = new AuditRecord.Changes();
+
+    for (JsonMerkleDiff.DiffEntry d : r.diffs) {
+      switch (d.type) {
+        case ADDED -> {
+          AuditRecord.Added x = new AuditRecord.Added();
+          x.path = d.path;
+          x.newValue = d.newValue;
+          a.changes.added.add(x);
+        }
+        case REMOVED -> {
+          AuditRecord.Removed x = new AuditRecord.Removed();
+          x.path = d.path;
+          x.oldValue = d.oldValue;
+          a.changes.removed.add(x);
+        }
+        case CHANGED -> {
+          AuditRecord.Changed x = new AuditRecord.Changed();
+          x.path = d.path;
+          x.oldValue = d.oldValue;
+          x.newValue = d.newValue;
+          a.changes.changed.add(x);
+        }
+      }
+    }
+
+    a.summary = new AuditRecord.Summary();
+    a.summary.addedCount = a.changes.added.size();
+    a.summary.removedCount = a.changes.removed.size();
+    a.summary.changedCount = a.changes.changed.size();
+    a.summary.totalChanges =
+        a.summary.addedCount + a.summary.removedCount + a.summary.changedCount;
+
+    a.collapsedChangedPaths = r.collapsedChangedPaths;
+    return a;
+  }
+}
