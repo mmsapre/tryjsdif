@@ -1,0 +1,63 @@
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class JsonMerkleDiffDemo {
+
+  public static void main(String[] args) throws Exception {
+    ObjectMapper om = new ObjectMapper();
+
+    // OLD:
+    // - Primary Grid G001
+    // - Secondary Grid G002
+    // - accountName exists
+    String oldJsonStr = "{\n" +
+        "  \"Account\": {\n" +
+        "    \"accountName\": \"Corp-001\",\n" +
+        "    \"PartyRoles\": {\n" +
+        "      \"PartyRole\": [\n" +
+        "        { \"RoleType\": \"Primary\", \"Grid\": \"G001\" },\n" +
+        "        { \"RoleType\": \"Secondary\", \"Grid\": \"G002\" }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    // NEW:
+    // - Primary Grid changed to G009 (CHANGE)
+    // - Secondary removed (REMOVE)
+    // - Tertiary added (ADD)
+    // - accountName removed (REMOVE)
+    // - array order swapped (ignored due to KEYED)
+    String newJsonStr = "{\n" +
+        "  \"Account\": {\n" +
+        "    \"PartyRoles\": {\n" +
+        "      \"PartyRole\": [\n" +
+        "        { \"RoleType\": \"Tertiary\", \"Grid\": \"G777\" },\n" +
+        "        { \"RoleType\": \"Primary\", \"Grid\": \"G009\" }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    JsonNode oldJson = om.readTree(oldJsonStr);
+    JsonNode newJson = om.readTree(newJsonStr);
+
+    JsonMerkleConfig cfg = new JsonMerkleConfig()
+        .withDefaultArrayPolicy(JsonMerkleConfig.ArrayPolicyType.UNORDERED)
+        .addRule(JsonMerkleConfig.ArrayRule.keyed("$.Account.PartyRoles.PartyRole", "RoleType"));
+
+    JsonMerkleDiff.Result r = JsonMerkleDiff.diff(oldJson, newJson, cfg);
+
+    System.out.println("Old root hash: " + r.oldRootHash);
+    System.out.println("New root hash: " + r.newRootHash);
+    System.out.println("\n=== DIFF ENTRIES (with old/new values) ===");
+    for (JsonMerkleDiff.DiffEntry d : r.diffs) {
+      System.out.println(d);
+    }
+
+    System.out.println("\n=== COLLAPSED CHANGED PATHS ===");
+    for (String p : r.collapsedChangedPaths) {
+      System.out.println(p);
+    }
+  }
+}
