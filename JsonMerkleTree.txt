@@ -1,0 +1,194 @@
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.*;
+
+public final class JsonMerkleTree {
+
+  public enum Kind { OBJECT, ARRAY, VALUE, NULL }
+
+  public static final class Node {
+    public final String path;
+    public final Kind kind;
+    public final String hashHex;
+
+    // For diff recursion
+    public final Map<String, Node> obj;     // for OBJECT
+    public final List<Node> arr;            // for ARRAY
+    public final String valueCanon;         // for VALUE/NULL (debug + old/new)
+
+    Node(String path, Kind kind, String hashHex,
+         Map<String, Node> obj, List<Node> arr, String valueCanon) {
+      this.path = path;
+      this.kind = kind;
+      this.hashHex = hashHex;
+      this.obj = obj;
+      this.arr = arr;
+      this.valueCanon = valueCanon;
+    }
+  }
+
+  public static final class Tree {
+    public final Node root;
+    public final Map<String, String> hashByPath; // quick lookup
+
+    Tree(Node root, Map<String, String> hashByPath) {
+      this.root = root;
+      this.hashByPath = hashByPath;
+    }
+  }
+
+  public static Tree build(JsonNode json, JsonMerkleConfig cfg) {
+    if (json == null) json = NullNode.getInstance();
+    Map<String, String> hashByPath = new LinkedHashMap<>();
+    Node root = buildNode("$", json, cfg, hashByPath);
+    return new Tree(root, hashByPath);
+  }
+
+  private static Node buildNode(String path, JsonNode node, JsonMerkleConfig cfg,
+                                Map<String, String> hashByPath) {
+    if (node == null || node.isNull()) {
+      String canon = "null";
+      String h = sha256Hex("null");
+      hashByPath.put(path, h);
+      return new Node(path, Kind.NULL, h, null, null, canon);
+    }
+
+    if (node.isValueNode()) {
+      String canon = canonicalValue(node);
+      String h = sha256Hex("v:" + canon);
+      hashByPath.put(path, h);
+      return new Node(path, Kind.VALUE, h, null, null, canon);
+    }
+
+    if (node.isObject()) {
+      // canonical: sort keys
+      List<String> keys = new ArrayList<>();
+      node.fieldNames().forEachRemaining(keys::add);
+      Collections.sort(keys);
+
+      Map<String, Node> children = new LinkedHashMap<>();
+      List<String> childPairs = new ArrayList<>();
+
+      for (String k : keys) {
+        String childPath = path + "." + escapeKey(k);
+        Node c = buildNode(childPath, node.get(k), cfg, hashByPath);
+        children.put(k, c);
+        childPairs.add(k + "=" + c.hashHex);
+      }
+
+      String h = sha256Hex("o:" + String.join("|", childPairs));
+      hashByPath.put(path, h);
+      return new Node(path, Kind.OBJECT, h, children, null, "{keys=" + keys + "}");
+    }
+
+    if (node.isArray()) {
+      JsonMerkleConfig.ArrayRule rule = cfg.ruleFor(path);
+
+      if (rule.type == JsonMerkleConfig.ArrayPolicyType.KEYED) {
+        // KEYED: index children by keyField -> stable semantic paths: path['Key']
+        Map<String, Node> keyed = new LinkedHashMap<>();
+        List<String> keyPairs = new ArrayList<>();
+
+        Map<String, JsonNode> byKey = indexByKey(node, rule.keyField);
+        List<String> keys = new ArrayList<>(byKey.keySet());
+        Collections.sort(keys);
+
+        for (String k : keys) {
+          String childPath = path + "['" + k.replace("'", "\\'") + "']";
+          Node c = buildNode(childPath, byKey.get(k), cfg, hashByPath);
+          keyed.put(k, c);
+          keyPairs.add(k + "=" + c.hashHex);
+        }
+
+        // represent keyed-array node as ARRAY with arr children in key order
+        List<Node> children = new ArrayList<>();
+        for (String k : keys) children.add(keyed.get(k));
+
+        String h = sha256Hex("ak:" + rule.keyField + "|" + String.join("|", keyPairs));
+        hashByPath.put(path, h);
+        return new Node(path, Kind.ARRAY, h, null, children, "keyed(" + rule.keyField + ")");
+      }
+
+      if (rule.type == JsonMerkleConfig.ArrayPolicyType.ORDERED) {
+        // ORDERED: keep index-based paths
+        List<Node> children = new ArrayList<>();
+        List<String> childHashes = new ArrayList<>();
+
+        int i = 0;
+        for (JsonNode e : node) {
+          String childPath = path + "[" + i + "]";
+          Node c = buildNode(childPath, e, cfg, hashByPath);
+          children.add(c);
+          childHashes.add(c.hashHex);
+          i++;
+        }
+
+        String h = sha256Hex("ao:" + String.join("|", childHashes));
+        hashByPath.put(path, h);
+        return new Node(path, Kind.ARRAY, h, null, children, "ordered");
+      }
+
+      // UNORDERED: order-independent (multiset by element hash). Paths are still indexed,
+      // but hashing ignores ordering.
+      List<Node> children = new ArrayList<>();
+      List<String> elemHashes = new ArrayList<>();
+
+      int i = 0;
+      for (JsonNode e : node) {
+        String childPath = path + "[" + i + "]";
+        Node c = buildNode(childPath, e, cfg, hashByPath);
+        children.add(c);
+        elemHashes.add(c.hashHex);
+        i++;
+      }
+
+      Collections.sort(elemHashes);
+      String h = sha256Hex("au:" + String.join("|", elemHashes));
+      hashByPath.put(path, h);
+      return new Node(path, Kind.ARRAY, h, null, children, "unordered");
+    }
+
+    // Fallback
+    String canon = node.toString();
+    String h = sha256Hex("x:" + canon);
+    hashByPath.put(path, h);
+    return new Node(path, Kind.VALUE, h, null, null, canon);
+  }
+
+  private static Map<String, JsonNode> indexByKey(JsonNode array, String keyField) {
+    Map<String, JsonNode> map = new LinkedHashMap<>();
+    if (array == null || !array.isArray()) return map;
+    for (JsonNode n : array) {
+      JsonNode k = n.get(keyField);
+      if (k != null && !k.isNull()) map.put(k.asText(), n);
+    }
+    return map;
+  }
+
+  private static String canonicalValue(JsonNode v) {
+    if (v.isTextual()) return "\"" + v.textValue() + "\"";
+    if (v.isNumber()) return v.numberValue().toString();
+    if (v.isBoolean()) return String.valueOf(v.booleanValue());
+    return v.asText();
+  }
+
+  private static String sha256Hex(String s) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      byte[] dig = md.digest(s.getBytes(StandardCharsets.UTF_8));
+      StringBuilder sb = new StringBuilder(dig.length * 2);
+      for (byte b : dig) sb.append(String.format("%02x", b));
+      return sb.toString();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static String escapeKey(String k) {
+    if (k.matches("^[A-Za-z_][A-Za-z0-9_]*$")) return k;
+    return "['" + k.replace("'", "\\'") + "']";
+  }
+}
