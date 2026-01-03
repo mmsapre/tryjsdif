@@ -1,0 +1,48 @@
+import java.time.Instant;
+import java.util.*;
+
+public class AuditRecord {
+
+  public String auditType;
+  public Instant timestamp;
+
+  public Hashes hashes;
+  public Summary summary;
+  public Changes changes;
+
+  public List<String> collapsedChangedPaths;
+
+  public static class Hashes {
+    public String oldRootHash;
+    public String newRootHash;
+  }
+
+  public static class Summary {
+    public int addedCount;
+    public int removedCount;
+    public int changedCount;
+    public int totalChanges;
+  }
+
+  public static class Changes {
+    public List<Removed> removed = new ArrayList<>();
+    public List<Added> added = new ArrayList<>();
+    public List<Changed> changed = new ArrayList<>();
+  }
+
+  public static class Removed {
+    public String path;
+    public Object oldValue;
+  }
+
+  public static class Added {
+    public String path;
+    public Object newValue;
+  }
+
+  public static class Changed {
+    public String path;
+    public Object oldValue;
+    public Object newValue;
+  }
+}
