@@ -1,0 +1,22 @@
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.*;
+
+public final class EntityIdExtractor {
+
+  public static Map<String, Object> extract(JsonNode json, EntityIdConfig cfg) {
+    Map<String, Object> ids = new LinkedHashMap<>();
+
+    for (Map.Entry<String, String> e : cfg.jsonPointers.entrySet()) {
+      JsonNode n = json.at(e.getValue());
+      if (n.isMissingNode() || n.isNull()) {
+        ids.put(e.getKey(), null);
+      } else if (n.isValueNode()) {
+        ids.put(e.getKey(), n.asText());
+      } else {
+        ids.put(e.getKey(), n); // object/array allowed
+      }
+    }
+    return ids;
+  }
+}
