@@ -1,0 +1,49 @@
+import java.util.*;
+
+public final class JsonMerkleConfig {
+
+  public enum ArrayPolicyType { ORDERED, UNORDERED, KEYED }
+
+  public static final class ArrayRule {
+    public final String path;          // JSONPath-like: $.Account.PartyRoles.PartyRole
+    public final ArrayPolicyType type;
+    public final String keyField;      // only for KEYED
+
+    public ArrayRule(String path, ArrayPolicyType type, String keyField) {
+      this.path = path;
+      this.type = type;
+      this.keyField = keyField;
+    }
+
+    public static ArrayRule keyed(String path, String keyField) {
+      return new ArrayRule(path, ArrayPolicyType.KEYED, keyField);
+    }
+
+    public static ArrayRule unordered(String path) {
+      return new ArrayRule(path, ArrayPolicyType.UNORDERED, null);
+    }
+
+    public static ArrayRule ordered(String path) {
+      return new ArrayRule(path, ArrayPolicyType.ORDERED, null);
+    }
+  }
+
+  private final Map<String, ArrayRule> rules = new HashMap<>();
+  private ArrayPolicyType defaultArrayPolicy = ArrayPolicyType.UNORDERED;
+
+  public JsonMerkleConfig withDefaultArrayPolicy(ArrayPolicyType t) {
+    this.defaultArrayPolicy = t;
+    return this;
+  }
+
+  public JsonMerkleConfig addRule(ArrayRule r) {
+    rules.put(r.path, r);
+    return this;
+  }
+
+  public ArrayRule ruleFor(String path) {
+    ArrayRule r = rules.get(path);
+    if (r != null) return r;
+    return new ArrayRule(path, defaultArrayPolicy, null);
+  }
+}
