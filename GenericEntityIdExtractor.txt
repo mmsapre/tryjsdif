@@ -1,0 +1,101 @@
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.*;
+import java.util.regex.Pattern;
+
+public final class GenericEntityIdExtractor {
+
+  private static final Pattern ID_NAME_PATTERN =
+      Pattern.compile("(?i).*(^|_)(id|key|code|identifier)$");
+
+  private GenericEntityIdExtractor() {}
+
+  public static Map<String, Object> extract(
+      JsonNode oldJson,
+      JsonNode newJson,
+      Map<String, List<String>> idHints // optional
+  ) {
+    Map<String, Object> ids = new LinkedHashMap<>();
+
+    // 1️⃣ Explicit hints (if provided)
+    if (idHints != null && !idHints.isEmpty()) {
+      for (Map.Entry<String, List<String>> e : idHints.entrySet()) {
+        Object v = findByHints(newJson, e.getValue());
+        if (v != null) ids.put(e.getKey(), v);
+      }
+      if (!ids.isEmpty()) return ids;
+    }
+
+    // 2️⃣ Structural inference (stable fields only)
+    Map<String, Object> candidates =
+        findIdCandidates(newJson, "$");
+
+    for (Map.Entry<String, Object> e : candidates.entrySet()) {
+      String path = e.getKey();
+      Object newVal = e.getValue();
+      Object oldVal = getValueAt(oldJson, path);
+
+      if (Objects.equals(oldVal, newVal)) {
+        ids.put(normalizeLabel(path), newVal);
+      }
+    }
+
+    return ids;
+  }
+
+  // ---------------- helpers ----------------
+
+  private static Object findByHints(JsonNode json, List<String> hints) {
+    Map<String, Object> all = findIdCandidates(json, "$");
+    for (String h : hints) {
+      for (Map.Entry<String, Object> e : all.entrySet()) {
+        if (e.getKey().toLowerCase().endsWith(h.toLowerCase())) {
+          return e.getValue();
+        }
+      }
+    }
+    return null;
+  }
+
+  private static Map<String, Object> findIdCandidates(JsonNode node, String path) {
+    Map<String, Object> out = new LinkedHashMap<>();
+
+    if (node.isObject()) {
+      node.fields().forEachRemaining(f -> {
+        String name = f.getKey();
+        JsonNode v = f.getValue();
+        String p = path + "." + name;
+
+        if (isIdLike(name) && v.isValueNode()) {
+          out.put(p, v.asText());
+        } else {
+          out.putAll(findIdCandidates(v, p));
+        }
+      });
+    } else if (node.isArray()) {
+      for (int i = 0; i < node.size(); i++) {
+        out.putAll(findIdCandidates(node.get(i), path + "[" + i + "]"));
+      }
+    }
+    return out;
+  }
+
+  private static boolean isIdLike(String fieldName) {
+    return ID_NAME_PATTERN.matcher(fieldName).matches();
+  }
+
+  private static Object getValueAt(JsonNode json, String path) {
+    try {
+      String pointer = path.replace(".", "/").replace("$", "");
+      JsonNode n = json.at(pointer);
+      return n.isMissingNode() ? null : n.isValueNode() ? n.asText() : null;
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static String normalizeLabel(String path) {
+    String[] parts = path.split("\\.");
+    return parts[parts.length - 1];
+  }
+}
