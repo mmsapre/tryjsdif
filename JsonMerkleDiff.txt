@@ -1,0 +1,241 @@
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.*;
+
+public final class JsonMerkleDiff {
+
+  public enum ChangeType { ADDED, REMOVED, CHANGED }
+
+  public static final class DiffEntry {
+    public final String path;
+    public final ChangeType type;
+    public final JsonNode oldValue; // null for ADDED
+    public final JsonNode newValue; // null for REMOVED
+
+    public DiffEntry(String path, ChangeType type, JsonNode oldValue, JsonNode newValue) {
+      this.path = path;
+      this.type = type;
+      this.oldValue = oldValue;
+      this.newValue = newValue;
+    }
+
+    @Override public String toString() {
+      return type + " " + path +
+          " old=" + (oldValue == null ? "null" : oldValue.toString()) +
+          " new=" + (newValue == null ? "null" : newValue.toString());
+    }
+  }
+
+  public static final class Result {
+    public final String oldRootHash;
+    public final String newRootHash;
+    public final List<DiffEntry> diffs;               // leaf-ish diffs with values
+    public final List<String> collapsedChangedPaths;  // high-level paths
+
+    Result(String oldRootHash, String newRootHash, List<DiffEntry> diffs, List<String> collapsed) {
+      this.oldRootHash = oldRootHash;
+      this.newRootHash = newRootHash;
+      this.diffs = diffs;
+      this.collapsedChangedPaths = collapsed;
+    }
+  }
+
+  public static Result diff(JsonNode oldJson, JsonNode newJson, JsonMerkleConfig cfg) {
+    JsonMerkleTree.Tree t1 = JsonMerkleTree.build(oldJson, cfg);
+    JsonMerkleTree.Tree t2 = JsonMerkleTree.build(newJson, cfg);
+
+    List<DiffEntry> diffs = new ArrayList<>();
+    diffRec("$", oldJson, newJson, t1, t2, cfg, diffs);
+
+    List<String> collapsed = collapse(diffs);
+    return new Result(t1.root.hashHex, t2.root.hashHex, diffs, collapsed);
+  }
+
+  private static void diffRec(
+      String path,
+      JsonNode oldNode,
+      JsonNode newNode,
+      JsonMerkleTree.Tree t1,
+      JsonMerkleTree.Tree t2,
+      JsonMerkleConfig cfg,
+      List<DiffEntry> out
+  ) {
+    String h1 = t1.hashByPath.get(path);
+    String h2 = t2.hashByPath.get(path);
+
+    if (oldNode == null && newNode == null) return;
+    if (oldNode == null) { out.add(new DiffEntry(path, ChangeType.ADDED, null, newNode)); return; }
+    if (newNode == null) { out.add(new DiffEntry(path, ChangeType.REMOVED, oldNode, null)); return; }
+
+    // If subtree hash equal, nothing to do
+    if (h1 != null && h2 != null && h1.equals(h2)) return;
+
+    // If either is value/null => changed leaf
+    if (oldNode.isValueNode() || oldNode.isNull() || newNode.isValueNode() || newNode.isNull()) {
+      out.add(new DiffEntry(path, ChangeType.CHANGED, oldNode, newNode));
+      return;
+    }
+
+    // Kind mismatch => changed at this path
+    if (oldNode.getNodeType() != newNode.getNodeType()) {
+      out.add(new DiffEntry(path, ChangeType.CHANGED, oldNode, newNode));
+      return;
+    }
+
+    // Objects
+    if (oldNode.isObject() && newNode.isObject()) {
+      Set<String> fields = new HashSet<>();
+      oldNode.fieldNames().forEachRemaining(fields::add);
+      newNode.fieldNames().forEachRemaining(fields::add);
+
+      for (String f : fields) {
+        String childPath = path + "." + escapeKey(f);
+        JsonNode o = oldNode.get(f);
+        JsonNode n = newNode.get(f);
+        if (o == null) out.add(new DiffEntry(childPath, ChangeType.ADDED, null, n));
+        else if (n == null) out.add(new DiffEntry(childPath, ChangeType.REMOVED, o, null));
+        else diffRec(childPath, o, n, t1, t2, cfg, out);
+      }
+      return;
+    }
+
+    // Arrays
+    if (oldNode.isArray() && newNode.isArray()) {
+      JsonMerkleConfig.ArrayRule rule = cfg.ruleFor(path);
+
+      if (rule.type == JsonMerkleConfig.ArrayPolicyType.KEYED) {
+        keyedArrayDiff(path, oldNode, newNode, rule.keyField, t1, t2, cfg, out);
+        return;
+      }
+
+      if (rule.type == JsonMerkleConfig.ArrayPolicyType.ORDERED) {
+        int max = Math.max(oldNode.size(), newNode.size());
+        for (int i = 0; i < max; i++) {
+          String childPath = path + "[" + i + "]";
+          JsonNode o = i < oldNode.size() ? oldNode.get(i) : null;
+          JsonNode n = i < newNode.size() ? newNode.get(i) : null;
+          diffRec(childPath, o, n, t1, t2, cfg, out);
+        }
+        return;
+      }
+
+      // UNORDERED: we can reliably produce add/remove via multiset by element hash.
+      // (To get old/new per element you need KEYED.)
+      multisetArrayAddRemove(path, oldNode, newNode, t1, t2, out);
+      return;
+    }
+
+    // Fallback: mark changed
+    out.add(new DiffEntry(path, ChangeType.CHANGED, oldNode, newNode));
+  }
+
+  private static void keyedArrayDiff(
+      String path,
+      JsonNode oldArr,
+      JsonNode newArr,
+      String keyField,
+      JsonMerkleTree.Tree t1,
+      JsonMerkleTree.Tree t2,
+      JsonMerkleConfig cfg,
+      List<DiffEntry> out
+  ) {
+    Map<String, JsonNode> oldMap = indexByKey(oldArr, keyField);
+    Map<String, JsonNode> newMap = indexByKey(newArr, keyField);
+
+    Set<String> keys = new HashSet<>();
+    keys.addAll(oldMap.keySet());
+    keys.addAll(newMap.keySet());
+
+    for (String k : keys) {
+      String childPath = path + "['" + k.replace("'", "\\'") + "']";
+      JsonNode o = oldMap.get(k);
+      JsonNode n = newMap.get(k);
+
+      if (o == null) out.add(new DiffEntry(childPath, ChangeType.ADDED, null, n));
+      else if (n == null) out.add(new DiffEntry(childPath, ChangeType.REMOVED, o, null));
+      else diffRec(childPath, o, n, t1, t2, cfg, out);
+    }
+  }
+
+  private static void multisetArrayAddRemove(
+      String path,
+      JsonNode oldArr,
+      JsonNode newArr,
+      JsonMerkleTree.Tree t1,
+      JsonMerkleTree.Tree t2,
+      List<DiffEntry> out
+  ) {
+    // Count element hashes in each
+    Map<String, Integer> c1 = new HashMap<>();
+    Map<String, Integer> c2 = new HashMap<>();
+
+    for (int i = 0; i < oldArr.size(); i++) {
+      String hp = t1.hashByPath.get(path + "[" + i + "]");
+      c1.put(hp, c1.getOrDefault(hp, 0) + 1);
+    }
+    for (int i = 0; i < newArr.size(); i++) {
+      String hp = t2.hashByPath.get(path + "[" + i + "]");
+      c2.put(hp, c2.getOrDefault(hp, 0) + 1);
+    }
+
+    Set<String> all = new HashSet<>();
+    all.addAll(c1.keySet());
+    all.addAll(c2.keySet());
+
+    // Produce adds/removes (values shown as whole elements)
+    for (String h : all) {
+      int n1 = c1.getOrDefault(h, 0);
+      int n2 = c2.getOrDefault(h, 0);
+      if (n2 > n1) {
+        // added n2-n1 elements with this hash
+        int need = n2 - n1;
+        for (int i = 0; i < newArr.size() && need > 0; i++) {
+          String p = path + "[" + i + "]";
+          if (h.equals(t2.hashByPath.get(p))) {
+            out.add(new DiffEntry(p, ChangeType.ADDED, null, newArr.get(i)));
+            need--;
+          }
+        }
+      } else if (n1 > n2) {
+        int need = n1 - n2;
+        for (int i = 0; i < oldArr.size() && need > 0; i++) {
+          String p = path + "[" + i + "]";
+          if (h.equals(t1.hashByPath.get(p))) {
+            out.add(new DiffEntry(p, ChangeType.REMOVED, oldArr.get(i), null));
+            need--;
+          }
+        }
+      }
+    }
+  }
+
+  private static Map<String, JsonNode> indexByKey(JsonNode array, String keyField) {
+    Map<String, JsonNode> map = new LinkedHashMap<>();
+    if (array == null || !array.isArray()) return map;
+    for (JsonNode n : array) {
+      JsonNode k = n.get(keyField);
+      if (k != null && !k.isNull()) map.put(k.asText(), n);
+    }
+    return map;
+  }
+
+  private static List<String> collapse(List<DiffEntry> diffs) {
+    // collapse to parent containers (remove leaf noise)
+    Set<String> paths = new HashSet<>();
+    for (DiffEntry d : diffs) {
+      // collapse leaf to its parent path (last '.' or "['k']" boundary)
+      String p = d.path;
+      int dot = p.lastIndexOf('.');
+      if (dot > 0) paths.add(p.substring(0, dot));
+      else paths.add(p);
+    }
+    List<String> out = new ArrayList<>(paths);
+    Collections.sort(out);
+    return out;
+  }
+
+  private static String escapeKey(String k) {
+    if (k.matches("^[A-Za-z_][A-Za-z0-9_]*$")) return k;
+    return "['" + k.replace("'", "\\'") + "']";
+  }
+}
