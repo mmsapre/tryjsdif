@@ -1,0 +1,104 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * Demo handling:
+ * - null
+ * - blank
+ * - {}
+ */
+public class JsonMerkleDiffDemo {
+
+    private static final ObjectMapper OM =
+            new ObjectMapper();
+
+    public static void main(String[] args)
+            throws Exception {
+
+        // =================================================
+        // OLD JSON
+        // =================================================
+
+        String oldJsonStr = null;
+
+        // String oldJsonStr = "";
+        // String oldJsonStr = "{}";
+
+        // =================================================
+        // NEW JSON
+        // =================================================
+
+        String newJsonStr =
+                "{\n" +
+                "  \"accountId\": \"A100\",\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"grid\": \"G009\",\n" +
+                "  \"countryCode\": \"SG\"\n" +
+                "}";
+
+        // =================================================
+        // SAFE PARSE
+        // =================================================
+
+        JsonNode oldJson =
+                safeParse(oldJsonStr);
+
+        JsonNode newJson =
+                safeParse(newJsonStr);
+
+        // =================================================
+        // DIFF
+        // =================================================
+
+        JsonMerkleDiffResult result =
+                JsonMerkleDiff.diff(
+                        oldJson,
+                        newJson
+                );
+
+        // =================================================
+        // PRINT
+        // =================================================
+
+        String out =
+                OM.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(result);
+
+        System.out.println(out);
+    }
+
+    // =====================================================
+    // SAFE PARSE
+    // =====================================================
+
+    private static JsonNode safeParse(
+            String json
+    ) throws Exception {
+
+        // ---------------------------------------------
+        // null
+        // ---------------------------------------------
+
+        if (json == null) {
+
+            return OM.readTree("{}");
+        }
+
+        // ---------------------------------------------
+        // blank
+        // ---------------------------------------------
+
+        if (json.trim().isEmpty()) {
+
+            return OM.readTree("{}");
+        }
+
+        // ---------------------------------------------
+        // parse
+        // ---------------------------------------------
+
+        return OM.readTree(json);
+    }
+}
