@@ -1,0 +1,412 @@
+package com.example.merkle.json;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Final structured result
+ * matching CMF change log structure
+ */
+public class JsonMerkleDiffResult {
+
+    // =====================================================
+    // ROOT
+    // =====================================================
+
+    private CmfChangeLog cmfChangeLog =
+            new CmfChangeLog();
+
+    public CmfChangeLog getCmfChangeLog() {
+        return cmfChangeLog;
+    }
+
+    public void setCmfChangeLog(CmfChangeLog cmfChangeLog) {
+        this.cmfChangeLog = cmfChangeLog;
+    }
+
+    // =====================================================
+    // INNER ROOT OBJECT
+    // =====================================================
+
+    public static class CmfChangeLog {
+
+        // ---------------------------------------------
+        // change groups
+        // ---------------------------------------------
+
+        private List<StructuredChange> added =
+                new ArrayList<StructuredChange>();
+
+        private List<StructuredChange> removed =
+                new ArrayList<StructuredChange>();
+
+        private List<StructuredChange> changed =
+                new ArrayList<StructuredChange>();
+
+        // ---------------------------------------------
+        // summary
+        // ---------------------------------------------
+
+        private Summary summary =
+                new Summary();
+
+        // ---------------------------------------------
+        // semantic impact
+        // ---------------------------------------------
+
+        private SemanticImpact semanticImpact =
+                new SemanticImpact();
+
+        // ---------------------------------------------
+        // collapsed paths
+        // ---------------------------------------------
+
+        private List<String> collapsedChangedPaths =
+                new ArrayList<String>();
+
+        // ---------------------------------------------
+        // hashes
+        // ---------------------------------------------
+
+        private Hashes hashes =
+                new Hashes();
+
+        // ---------------------------------------------
+        // entity ids
+        // ---------------------------------------------
+
+        private Map<String, Object> entityIds =
+                new LinkedHashMap<String, Object>();
+
+        // ---------------------------------------------
+        // metadata
+        // ---------------------------------------------
+
+        private String documentType;
+
+        private String generatedAt =
+                Instant.now().toString();
+
+        // =================================================
+        // GETTERS / SETTERS
+        // =================================================
+
+        public List<StructuredChange> getAdded() {
+            return added;
+        }
+
+        public void setAdded(List<StructuredChange> added) {
+            this.added = added;
+        }
+
+        public List<StructuredChange> getRemoved() {
+            return removed;
+        }
+
+        public void setRemoved(List<StructuredChange> removed) {
+            this.removed = removed;
+        }
+
+        public List<StructuredChange> getChanged() {
+            return changed;
+        }
+
+        public void setChanged(List<StructuredChange> changed) {
+            this.changed = changed;
+        }
+
+        public Summary getSummary() {
+            return summary;
+        }
+
+        public void setSummary(Summary summary) {
+            this.summary = summary;
+        }
+
+        public SemanticImpact getSemanticImpact() {
+            return semanticImpact;
+        }
+
+        public void setSemanticImpact(
+                SemanticImpact semanticImpact
+        ) {
+            this.semanticImpact = semanticImpact;
+        }
+
+        public List<String> getCollapsedChangedPaths() {
+            return collapsedChangedPaths;
+        }
+
+        public void setCollapsedChangedPaths(
+                List<String> collapsedChangedPaths
+        ) {
+            this.collapsedChangedPaths =
+                    collapsedChangedPaths;
+        }
+
+        public Hashes getHashes() {
+            return hashes;
+        }
+
+        public void setHashes(Hashes hashes) {
+            this.hashes = hashes;
+        }
+
+        public Map<String, Object> getEntityIds() {
+            return entityIds;
+        }
+
+        public void setEntityIds(
+                Map<String, Object> entityIds
+        ) {
+            this.entityIds = entityIds;
+        }
+
+        public String getDocumentType() {
+            return documentType;
+        }
+
+        public void setDocumentType(
+                String documentType
+        ) {
+            this.documentType = documentType;
+        }
+
+        public String getGeneratedAt() {
+            return generatedAt;
+        }
+
+        public void setGeneratedAt(
+                String generatedAt
+        ) {
+            this.generatedAt = generatedAt;
+        }
+    }
+
+    // =====================================================
+    // STRUCTURED CHANGE
+    // =====================================================
+
+    public static class StructuredChange {
+
+        private List<String> paths =
+                new ArrayList<String>();
+
+        private Map<String, Object> keyFields =
+                new LinkedHashMap<String, Object>();
+
+        private List<String> domainKeys =
+                new ArrayList<String>();
+
+        private Map<String, Object> oldValues =
+                new LinkedHashMap<String, Object>();
+
+        private Map<String, Object> newValues =
+                new LinkedHashMap<String, Object>();
+
+        private String oldHash;
+        private String newHash;
+
+        // =================================================
+        // GETTERS / SETTERS
+        // =================================================
+
+        public List<String> getPaths() {
+            return paths;
+        }
+
+        public void setPaths(List<String> paths) {
+            this.paths = paths;
+        }
+
+        public Map<String, Object> getKeyFields() {
+            return keyFields;
+        }
+
+        public void setKeyFields(
+                Map<String, Object> keyFields
+        ) {
+            this.keyFields = keyFields;
+        }
+
+        public List<String> getDomainKeys() {
+            return domainKeys;
+        }
+
+        public void setDomainKeys(
+                List<String> domainKeys
+        ) {
+            this.domainKeys = domainKeys;
+        }
+
+        public Map<String, Object> getOldValues() {
+            return oldValues;
+        }
+
+        public void setOldValues(
+                Map<String, Object> oldValues
+        ) {
+            this.oldValues = oldValues;
+        }
+
+        public Map<String, Object> getNewValues() {
+            return newValues;
+        }
+
+        public void setNewValues(
+                Map<String, Object> newValues
+        ) {
+            this.newValues = newValues;
+        }
+
+        public String getOldHash() {
+            return oldHash;
+        }
+
+        public void setOldHash(String oldHash) {
+            this.oldHash = oldHash;
+        }
+
+        public String getNewHash() {
+            return newHash;
+        }
+
+        public void setNewHash(String newHash) {
+            this.newHash = newHash;
+        }
+    }
+
+    // =====================================================
+    // SUMMARY
+    // =====================================================
+
+    public static class Summary {
+
+        private int added;
+        private int removed;
+        private int changed;
+        private int total;
+
+        public int getAdded() {
+            return added;
+        }
+
+        public void setAdded(int added) {
+            this.added = added;
+        }
+
+        public int getRemoved() {
+            return removed;
+        }
+
+        public void setRemoved(int removed) {
+            this.removed = removed;
+        }
+
+        public int getChanged() {
+            return changed;
+        }
+
+        public void setChanged(int changed) {
+            this.changed = changed;
+        }
+
+        public int getTotal() {
+            return total;
+        }
+
+        public void setTotal(int total) {
+            this.total = total;
+        }
+    }
+
+    // =====================================================
+    // HASHES
+    // =====================================================
+
+    public static class Hashes {
+
+        private String oldRootHash;
+        private String newRootHash;
+
+        public String getOldRootHash() {
+            return oldRootHash;
+        }
+
+        public void setOldRootHash(
+                String oldRootHash
+        ) {
+            this.oldRootHash = oldRootHash;
+        }
+
+        public String getNewRootHash() {
+            return newRootHash;
+        }
+
+        public void setNewRootHash(
+                String newRootHash
+        ) {
+            this.newRootHash = newRootHash;
+        }
+    }
+
+    // =====================================================
+    // SEMANTIC IMPACT
+    // =====================================================
+
+    public static class SemanticImpact {
+
+        private boolean identityChanged;
+
+        private boolean roleStructureChanged;
+
+        private boolean distributionRelevant;
+
+        private boolean currencyChanged;
+
+        public boolean isIdentityChanged() {
+            return identityChanged;
+        }
+
+        public void setIdentityChanged(
+                boolean identityChanged
+        ) {
+            this.identityChanged = identityChanged;
+        }
+
+        public boolean isRoleStructureChanged() {
+            return roleStructureChanged;
+        }
+
+        public void setRoleStructureChanged(
+                boolean roleStructureChanged
+        ) {
+            this.roleStructureChanged =
+                    roleStructureChanged;
+        }
+
+        public boolean isDistributionRelevant() {
+            return distributionRelevant;
+        }
+
+        public void setDistributionRelevant(
+                boolean distributionRelevant
+        ) {
+            this.distributionRelevant =
+                    distributionRelevant;
+        }
+
+        public boolean isCurrencyChanged() {
+            return currencyChanged;
+        }
+
+        public void setCurrencyChanged(
+                boolean currencyChanged
+        ) {
+            this.currencyChanged = currencyChanged;
+        }
+    }
+}
