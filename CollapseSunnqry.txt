@@ -1,0 +1,215 @@
+// =====================================================
+// NEW AGGREGATED SUMMARY METHOD
+// =====================================================
+
+public static Map<String, Object> collapseSummary(
+    Result r
+) {
+
+  Map<String, Object> root =
+      new LinkedHashMap<>();
+
+  Map<String, Object> cmfChangeLog =
+      new LinkedHashMap<>();
+
+  root.put("cmfChangeLog", cmfChangeLog);
+
+  // ===================================================
+  // ADDED
+  // ===================================================
+
+  Map<String, Object> added =
+      new LinkedHashMap<>();
+
+  added.put("paths", new ArrayList<String>());
+  added.put("values", new LinkedHashMap<String, Object>());
+
+  // ===================================================
+  // REMOVED
+  // ===================================================
+
+  Map<String, Object> removed =
+      new LinkedHashMap<>();
+
+  removed.put("paths", new ArrayList<String>());
+  removed.put("values", new LinkedHashMap<String, Object>());
+
+  // ===================================================
+  // CHANGED
+  // ===================================================
+
+  Map<String, Object> changed =
+      new LinkedHashMap<>();
+
+  changed.put("paths", new ArrayList<String>());
+  changed.put("oldValues", new LinkedHashMap<String, Object>());
+  changed.put("newValues", new LinkedHashMap<String, Object>());
+
+  // ===================================================
+  // COUNTS
+  // ===================================================
+
+  int addCount = 0;
+  int removeCount = 0;
+  int changeCount = 0;
+
+  // ===================================================
+  // PROCESS DIFFS
+  // ===================================================
+
+  for (DiffEntry d : r.diffs) {
+
+    String leaf =
+        leafName(d.path);
+
+    // -----------------------------------------------
+    // ADDED
+    // -----------------------------------------------
+
+    if (d.type == ChangeType.ADDED) {
+
+      ((List<String>) added.get("paths"))
+          .add(d.path);
+
+      ((Map<String, Object>) added.get("values"))
+          .put(
+              leaf,
+              jsonValue(d.newValue)
+          );
+
+      addCount++;
+    }
+
+    // -----------------------------------------------
+    // REMOVED
+    // -----------------------------------------------
+
+    else if (d.type == ChangeType.REMOVED) {
+
+      ((List<String>) removed.get("paths"))
+          .add(d.path);
+
+      ((Map<String, Object>) removed.get("values"))
+          .put(
+              leaf,
+              jsonValue(d.oldValue)
+          );
+
+      removeCount++;
+    }
+
+    // -----------------------------------------------
+    // CHANGED
+    // -----------------------------------------------
+
+    else if (d.type == ChangeType.CHANGED) {
+
+      ((List<String>) changed.get("paths"))
+          .add(d.path);
+
+      ((Map<String, Object>) changed.get("oldValues"))
+          .put(
+              leaf,
+              jsonValue(d.oldValue)
+          );
+
+      ((Map<String, Object>) changed.get("newValues"))
+          .put(
+              leaf,
+              jsonValue(d.newValue)
+          );
+
+      changeCount++;
+    }
+  }
+
+  // ===================================================
+  // SUMMARY
+  // ===================================================
+
+  Map<String, Object> summary =
+      new LinkedHashMap<>();
+
+  summary.put("added", addCount);
+  summary.put("removed", removeCount);
+  summary.put("changed", changeCount);
+  summary.put(
+      "total",
+      addCount + removeCount + changeCount
+  );
+
+  // ===================================================
+  // ROOT HASHES
+  // ===================================================
+
+  Map<String, Object> hashes =
+      new LinkedHashMap<>();
+
+  hashes.put("oldRootHash", r.oldRootHash);
+  hashes.put("newRootHash", r.newRootHash);
+
+  // ===================================================
+  // COLLAPSED PATHS
+  // ===================================================
+
+  cmfChangeLog.put(
+      "collapsedChangedPaths",
+      r.collapsedChangedPaths
+  );
+
+  // ===================================================
+  // PUT ALL
+  // ===================================================
+
+  cmfChangeLog.put("added", added);
+  cmfChangeLog.put("removed", removed);
+  cmfChangeLog.put("changed", changed);
+  cmfChangeLog.put("summary", summary);
+  cmfChangeLog.put("hashes", hashes);
+
+  return root;
+}
+
+// =====================================================
+// LEAF NAME
+// =====================================================
+
+private static String leafName(
+    String path
+) {
+
+  int dot = path.lastIndexOf('.');
+
+  if (dot >= 0) {
+    return path.substring(dot + 1);
+  }
+
+  return path;
+}
+
+// =====================================================
+// JSON VALUE
+// =====================================================
+
+private static Object jsonValue(
+    JsonNode node
+) {
+
+  if (node == null || node.isNull()) {
+    return null;
+  }
+
+  if (node.isTextual()) {
+    return node.asText();
+  }
+
+  if (node.isNumber()) {
+    return node.numberValue();
+  }
+
+  if (node.isBoolean()) {
+    return node.booleanValue();
+  }
+
+  return node;
+}
