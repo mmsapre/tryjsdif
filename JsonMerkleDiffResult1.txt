@@ -1,0 +1,80 @@
+package com.example.merkle.json;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Final result of JSON Merkle diff
+ */
+public class JsonMerkleDiffResult {
+
+    // root hashes
+    public String oldRootHash;
+    public String newRootHash;
+
+    // detailed diffs
+    public List<JsonDiffEntry> diffs =
+            new ArrayList<JsonDiffEntry>();
+
+    // collapsed parent paths
+    public List<String> collapsedChangedPaths =
+            new ArrayList<String>();
+
+    // convenience summary
+    public int addedCount;
+    public int removedCount;
+    public int changedCount;
+
+    public int totalChanges() {
+        return addedCount + removedCount + changedCount;
+    }
+
+    public void calculateSummary() {
+
+        addedCount = 0;
+        removedCount = 0;
+        changedCount = 0;
+
+        for (JsonDiffEntry d : diffs) {
+
+            switch (d.getType()) {
+
+                case ADDED:
+                    addedCount++;
+                    break;
+
+                case REMOVED:
+                    removedCount++;
+                    break;
+
+                case CHANGED:
+                    changedCount++;
+                    break;
+            }
+        }
+    }
+
+    @Override
+    public String toString() {
+
+        return "JsonMerkleDiffResult{" +
+                "oldRootHash='" + shortHash(oldRootHash) + '\'' +
+                ", newRootHash='" + shortHash(newRootHash) + '\'' +
+                ", added=" + addedCount +
+                ", removed=" + removedCount +
+                ", changed=" + changedCount +
+                ", collapsedChangedPaths=" + collapsedChangedPaths +
+                '}';
+    }
+
+    private String shortHash(String h) {
+
+        if (h == null) {
+            return null;
+        }
+
+        return h.length() > 12
+                ? h.substring(0, 12) + "..."
+                : h;
+    }
+}
