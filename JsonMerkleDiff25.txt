@@ -1,0 +1,441 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Generic JSON diff
+ *
+ * Output grouped into:
+ * - added
+ * - removed
+ * - changed
+ */
+public final class JsonMerkleDiff {
+
+    private static final ObjectMapper OM =
+            new ObjectMapper();
+
+    private JsonMerkleDiff() {
+    }
+
+    // =====================================================
+    // MAIN DIFF
+    // =====================================================
+
+    public static JsonMerkleDiffResult diff(
+            JsonNode oldJson,
+            JsonNode newJson
+    ) throws Exception {
+
+        JsonMerkleDiffResult result =
+                new JsonMerkleDiffResult();
+
+        // ---------------------------------------------
+        // handle nulls
+        // ---------------------------------------------
+
+        if (oldJson == null || oldJson.isNull()) {
+            oldJson = OM.readTree("{}");
+        }
+
+        if (newJson == null || newJson.isNull()) {
+            newJson = OM.readTree("{}");
+        }
+
+        // ---------------------------------------------
+        // start recursive diff
+        // ---------------------------------------------
+
+        diffRecursive(
+                "",
+                oldJson,
+                newJson,
+                result
+        );
+
+        // ---------------------------------------------
+        // summary
+        // ---------------------------------------------
+
+        result.buildSummary();
+
+        return result;
+    }
+
+    // =====================================================
+    // RECURSIVE DIFF
+    // =====================================================
+
+    private static void diffRecursive(
+            String path,
+            JsonNode oldNode,
+            JsonNode newNode,
+            JsonMerkleDiffResult result
+    ) {
+
+        // ---------------------------------------------
+        // added
+        // ---------------------------------------------
+
+        if (oldNode == null && newNode != null) {
+
+            collectAdded(
+                    path,
+                    newNode,
+                    result
+            );
+
+            return;
+        }
+
+        // ---------------------------------------------
+        // removed
+        // ---------------------------------------------
+
+        if (oldNode != null && newNode == null) {
+
+            collectRemoved(
+                    path,
+                    oldNode,
+                    result
+            );
+
+            return;
+        }
+
+        // ---------------------------------------------
+        // both null
+        // ---------------------------------------------
+
+        if (oldNode == null) {
+            return;
+        }
+
+        // ---------------------------------------------
+        // type changed
+        // ---------------------------------------------
+
+        if (
+                !oldNode.getNodeType()
+                        .equals(
+                                newNode.getNodeType()
+                        )
+        ) {
+
+            result.addChanged(
+                    path,
+                    leaf(path),
+                    jsonValue(oldNode),
+                    jsonValue(newNode)
+            );
+
+            return;
+        }
+
+        // ---------------------------------------------
+        // object
+        // ---------------------------------------------
+
+        if (oldNode.isObject()) {
+
+            Map<String, JsonNode> oldFields =
+                    fields(oldNode);
+
+            Map<String, JsonNode> newFields =
+                    fields(newNode);
+
+            // additions + changes
+            for (String f : newFields.keySet()) {
+
+                String child =
+                        path + "/" + f;
+
+                if (!oldFields.containsKey(f)) {
+
+                    collectAdded(
+                            child,
+                            newFields.get(f),
+                            result
+                    );
+                }
+
+                else {
+
+                    diffRecursive(
+                            child,
+                            oldFields.get(f),
+                            newFields.get(f),
+                            result
+                    );
+                }
+            }
+
+            // removals
+            for (String f : oldFields.keySet()) {
+
+                if (!newFields.containsKey(f)) {
+
+                    String child =
+                            path + "/" + f;
+
+                    collectRemoved(
+                            child,
+                            oldFields.get(f),
+                            result
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // ---------------------------------------------
+        // array
+        // ---------------------------------------------
+
+        if (oldNode.isArray()) {
+
+            int max =
+                    Math.max(
+                            oldNode.size(),
+                            newNode.size()
+                    );
+
+            for (int i = 0; i < max; i++) {
+
+                JsonNode o =
+                        i < oldNode.size()
+                                ? oldNode.get(i)
+                                : null;
+
+                JsonNode n =
+                        i < newNode.size()
+                                ? newNode.get(i)
+                                : null;
+
+                diffRecursive(
+                        path + "[" + i + "]",
+                        o,
+                        n,
+                        result
+                );
+            }
+
+            return;
+        }
+
+        // ---------------------------------------------
+        // value compare
+        // ---------------------------------------------
+
+        String ov =
+                oldNode.asText();
+
+        String nv =
+                newNode.asText();
+
+        if (!ov.equals(nv)) {
+
+            result.addChanged(
+                    path,
+                    leaf(path),
+                    jsonValue(oldNode),
+                    jsonValue(newNode)
+            );
+        }
+    }
+
+    // =====================================================
+    // COLLECT ADDED
+    // =====================================================
+
+    private static void collectAdded(
+            String path,
+            JsonNode node,
+            JsonMerkleDiffResult result
+    ) {
+
+        if (node == null) {
+            return;
+        }
+
+        // object
+        if (node.isObject()) {
+
+            Iterator<String> fields =
+                    node.fieldNames();
+
+            while (fields.hasNext()) {
+
+                String f =
+                        fields.next();
+
+                collectAdded(
+                        path + "/" + f,
+                        node.get(f),
+                        result
+                );
+            }
+
+            return;
+        }
+
+        // array
+        if (node.isArray()) {
+
+            for (int i = 0; i < node.size(); i++) {
+
+                collectAdded(
+                        path + "[" + i + "]",
+                        node.get(i),
+                        result
+                );
+            }
+
+            return;
+        }
+
+        // value
+        result.addAdded(
+                path,
+                leaf(path),
+                jsonValue(node)
+        );
+    }
+
+    // =====================================================
+    // COLLECT REMOVED
+    // =====================================================
+
+    private static void collectRemoved(
+            String path,
+            JsonNode node,
+            JsonMerkleDiffResult result
+    ) {
+
+        if (node == null) {
+            return;
+        }
+
+        // object
+        if (node.isObject()) {
+
+            Iterator<String> fields =
+                    node.fieldNames();
+
+            while (fields.hasNext()) {
+
+                String f =
+                        fields.next();
+
+                collectRemoved(
+                        path + "/" + f,
+                        node.get(f),
+                        result
+                );
+            }
+
+            return;
+        }
+
+        // array
+        if (node.isArray()) {
+
+            for (int i = 0; i < node.size(); i++) {
+
+                collectRemoved(
+                        path + "[" + i + "]",
+                        node.get(i),
+                        result
+                );
+            }
+
+            return;
+        }
+
+        // value
+        result.addRemoved(
+                path,
+                leaf(path),
+                jsonValue(node)
+        );
+    }
+
+    // =====================================================
+    // FIELDS
+    // =====================================================
+
+    private static Map<String, JsonNode> fields(
+            JsonNode node
+    ) {
+
+        Map<String, JsonNode> out =
+                new LinkedHashMap<String, JsonNode>();
+
+        Iterator<String> it =
+                node.fieldNames();
+
+        while (it.hasNext()) {
+
+            String f =
+                    it.next();
+
+            out.put(
+                    f,
+                    node.get(f)
+            );
+        }
+
+        return out;
+    }
+
+    // =====================================================
+    // LEAF
+    // =====================================================
+
+    private static String leaf(
+            String path
+    ) {
+
+        int idx =
+                path.lastIndexOf("/");
+
+        if (idx < 0) {
+            return path;
+        }
+
+        return path.substring(idx + 1);
+    }
+
+    // =====================================================
+    // JSON VALUE
+    // =====================================================
+
+    private static Object jsonValue(
+            JsonNode node
+    ) {
+
+        if (node == null) {
+            return null;
+        }
+
+        if (node.isTextual()) {
+            return node.asText();
+        }
+
+        if (node.isNumber()) {
+            return node.numberValue();
+        }
+
+        if (node.isBoolean()) {
+            return node.booleanValue();
+        }
+
+        return node.toString();
+    }
+}
