@@ -1,0 +1,114 @@
+package com.example.merkle.json;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Final CMF-style diff result
+ */
+public class JsonMerkleDiffResult {
+
+    private Map<String, Object> cmfChangeLog =
+            new LinkedHashMap<String, Object>();
+
+    public JsonMerkleDiffResult() {
+
+        cmfChangeLog.put(
+                "added",
+                new ArrayList<Map<String, Object>>()
+        );
+
+        cmfChangeLog.put(
+                "removed",
+                new ArrayList<Map<String, Object>>()
+        );
+
+        cmfChangeLog.put(
+                "changed",
+                new ArrayList<Map<String, Object>>()
+        );
+
+        cmfChangeLog.put(
+                "summary",
+                new LinkedHashMap<String, Object>()
+        );
+    }
+
+    public Map<String, Object> getCmfChangeLog() {
+        return cmfChangeLog;
+    }
+
+    public void setCmfChangeLog(
+            Map<String, Object> cmfChangeLog
+    ) {
+        this.cmfChangeLog = cmfChangeLog;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void addAdded(
+            Map<String, Object> item
+    ) {
+
+        ((List<Map<String, Object>>)
+                cmfChangeLog.get("added"))
+                .add(item);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void addRemoved(
+            Map<String, Object> item
+    ) {
+
+        ((List<Map<String, Object>>)
+                cmfChangeLog.get("removed"))
+                .add(item);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void addChanged(
+            Map<String, Object> item
+    ) {
+
+        ((List<Map<String, Object>>)
+                cmfChangeLog.get("changed"))
+                .add(item);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void buildSummary() {
+
+        int added =
+                ((List<?>) cmfChangeLog.get("added"))
+                        .size();
+
+        int removed =
+                ((List<?>) cmfChangeLog.get("removed"))
+                        .size();
+
+        int changed =
+                ((List<?>) cmfChangeLog.get("changed"))
+                        .size();
+
+        int total =
+                added + removed + changed;
+
+        Map<String, Object> summary =
+                (Map<String, Object>)
+                        cmfChangeLog.get("summary");
+
+        summary.put("added", added);
+        summary.put("removed", removed);
+        summary.put("changed", changed);
+        summary.put("total", total);
+    }
+
+    @Override
+    public String toString() {
+
+        return "JsonMerkleDiffResult{" +
+                "cmfChangeLog=" + cmfChangeLog +
+                '}';
+    }
+}
