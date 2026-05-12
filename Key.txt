@@ -1,0 +1,69 @@
+JsonMerkleConfig cfg =
+    new JsonMerkleConfig()
+
+    // array rule
+    .addRule(
+        JsonMerkleConfig.ArrayRule.keyed(
+            "$.Account.PartyRoles.PartyRole",
+            "RoleType"
+        )
+    )
+
+    // key fields
+    .addKeyField(
+        "accountId",
+        "$.Account.accountId"
+    )
+
+    .addKeyField(
+        "clientId",
+        "$.Account.clientId"
+    )
+
+    // domain attributes
+    .addDomainAttribute(
+        "accountType",
+        "$.Account.accountType"
+    )
+
+    .addDomainAttribute(
+        "region",
+        "$.Account.region"
+    )
+
+    .addDomainAttribute(
+        "sourceSystem",
+        "$.Account.sourceSystem"
+    );
+
+=======
+
+
+
+Map<String,Object> keyFields =
+    cfg.extractKeyFields(newJson);
+
+if (keyFields.isEmpty()) {
+  keyFields =
+      cfg.extractKeyFields(oldJson);
+}
+
+Map<String,Object> domainAttributes =
+    cfg.extractDomainAttributes(newJson);
+
+if (domainAttributes.isEmpty()) {
+  domainAttributes =
+      cfg.extractDomainAttributes(oldJson);
+}
+
+cmfChangeLog.put(
+    "keyFields",
+    keyFields
+);
+
+cmfChangeLog.put(
+    "domainAttributes",
+    domainAttributes
+);
+
+
