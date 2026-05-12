@@ -1,0 +1,70 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * Demo
+ */
+public class JsonMerkleDiffDemo {
+
+    private static final ObjectMapper OM =
+            new ObjectMapper();
+
+    public static void main(String[] args)
+            throws Exception {
+
+        // =================================================
+        // OLD JSON
+        // =================================================
+
+        String oldJsonStr =
+                "{\n" +
+                "  \"accountId\": \"A100\",\n" +
+                "  \"currency\": \"USD\",\n" +
+                "  \"grid\": \"G001\"\n" +
+                "}";
+
+        // =================================================
+        // NEW JSON
+        // =================================================
+
+        String newJsonStr =
+                "{\n" +
+                "  \"accountId\": \"A100\",\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"grid\": \"G009\",\n" +
+                "  \"countryCode\": \"SG\"\n" +
+                "}";
+
+        // =================================================
+        // PARSE
+        // =================================================
+
+        JsonNode oldJson =
+                OM.readTree(oldJsonStr);
+
+        JsonNode newJson =
+                OM.readTree(newJsonStr);
+
+        // =================================================
+        // DIFF
+        // =================================================
+
+        JsonMerkleDiffResult result =
+                JsonMerkleDiff.diff(
+                        oldJson,
+                        newJson
+                );
+
+        // =================================================
+        // PRINT
+        // =================================================
+
+        String out =
+                OM.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(result);
+
+        System.out.println(out);
+    }
+}
