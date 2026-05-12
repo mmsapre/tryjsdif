@@ -1,0 +1,237 @@
+import com.jayway.jsonpath.JsonPath;
+
+import java.util.*;
+
+public final class JsonMerkleConfig {
+
+  // =====================================================
+  // ARRAY POLICIES
+  // =====================================================
+
+  public enum ArrayPolicyType {
+    ORDERED,
+    UNORDERED,
+    KEYED
+  }
+
+  public static final class ArrayRule {
+
+    public final String path;
+
+    public final ArrayPolicyType type;
+
+    public final String keyField;
+
+    public ArrayRule(
+        String path,
+        ArrayPolicyType type,
+        String keyField
+    ) {
+      this.path = path;
+      this.type = type;
+      this.keyField = keyField;
+    }
+
+    public static ArrayRule keyed(
+        String path,
+        String keyField
+    ) {
+      return new ArrayRule(
+          path,
+          ArrayPolicyType.KEYED,
+          keyField
+      );
+    }
+
+    public static ArrayRule unordered(
+        String path
+    ) {
+      return new ArrayRule(
+          path,
+          ArrayPolicyType.UNORDERED,
+          null
+      );
+    }
+
+    public static ArrayRule ordered(
+        String path
+    ) {
+      return new ArrayRule(
+          path,
+          ArrayPolicyType.ORDERED,
+          null
+      );
+    }
+  }
+
+  // =====================================================
+  // ARRAY RULES
+  // =====================================================
+
+  private final Map<String, ArrayRule> rules =
+      new HashMap<>();
+
+  private ArrayPolicyType defaultArrayPolicy =
+      ArrayPolicyType.UNORDERED;
+
+  // =====================================================
+  // SUMMARY EXTRACTION
+  // =====================================================
+
+  /**
+   * Key fields:
+   * accountId
+   * clientId
+   * etc
+   */
+  private final Map<String,String> keyFields =
+      new LinkedHashMap<>();
+
+  /**
+   * Domain attributes:
+   * accountType
+   * region
+   * sourceSystem
+   */
+  private final Map<String,String> domainAttributes =
+      new LinkedHashMap<>();
+
+  // =====================================================
+  // ARRAY POLICY
+  // =====================================================
+
+  public JsonMerkleConfig withDefaultArrayPolicy(
+      ArrayPolicyType t
+  ) {
+    this.defaultArrayPolicy = t;
+    return this;
+  }
+
+  public JsonMerkleConfig addRule(
+      ArrayRule r
+  ) {
+    rules.put(r.path, r);
+    return this;
+  }
+
+  public ArrayRule ruleFor(
+      String path
+  ) {
+
+    ArrayRule r = rules.get(path);
+
+    if (r != null) {
+      return r;
+    }
+
+    return new ArrayRule(
+        path,
+        defaultArrayPolicy,
+        null
+    );
+  }
+
+  // =====================================================
+  // KEY FIELD CONFIG
+  // =====================================================
+
+  public JsonMerkleConfig addKeyField(
+      String name,
+      String jsonPath
+  ) {
+
+    keyFields.put(name, jsonPath);
+
+    return this;
+  }
+
+  public Map<String,String> getKeyFields() {
+    return keyFields;
+  }
+
+  // =====================================================
+  // DOMAIN ATTRIBUTES CONFIG
+  // =====================================================
+
+  public JsonMerkleConfig addDomainAttribute(
+      String name,
+      String jsonPath
+  ) {
+
+    domainAttributes.put(name, jsonPath);
+
+    return this;
+  }
+
+  public Map<String,String> getDomainAttributes() {
+    return domainAttributes;
+  }
+
+  // =====================================================
+  // EXTRACT KEYS
+  // =====================================================
+
+  public Map<String,Object> extractKeyFields(
+      Object json
+  ) {
+
+    Map<String,Object> out =
+        new LinkedHashMap<>();
+
+    for (Map.Entry<String,String> e :
+        keyFields.entrySet()) {
+
+      Object v =
+          read(json, e.getValue());
+
+      if (v != null) {
+        out.put(e.getKey(), v);
+      }
+    }
+
+    return out;
+  }
+
+  // =====================================================
+  // EXTRACT DOMAIN ATTRIBUTES
+  // =====================================================
+
+  public Map<String,Object> extractDomainAttributes(
+      Object json
+  ) {
+
+    Map<String,Object> out =
+        new LinkedHashMap<>();
+
+    for (Map.Entry<String,String> e :
+        domainAttributes.entrySet()) {
+
+      Object v =
+          read(json, e.getValue());
+
+      if (v != null) {
+        out.put(e.getKey(), v);
+      }
+    }
+
+    return out;
+  }
+
+  // =====================================================
+  // SAFE JSONPATH
+  // =====================================================
+
+  private Object read(
+      Object json,
+      String path
+  ) {
+
+    try {
+      return JsonPath.read(json, path);
+    }
+
+    catch (Exception e) {
+      return null;
+    }
+  }
+}
