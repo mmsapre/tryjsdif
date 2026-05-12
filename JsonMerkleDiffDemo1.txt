@@ -1,0 +1,179 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class JsonMerkleDiffDemo {
+
+    private static final ObjectMapper OM =
+            new ObjectMapper();
+
+    public static void main(String[] args) throws Exception {
+
+        // =====================================================
+        // OLD JSON
+        // =====================================================
+
+        String oldJsonStr =
+                "{\n" +
+                "  \"account\": {\n" +
+                "    \"accountId\": \"20034667\",\n" +
+                "    \"type\": \"PARTY-CASH-ACCOUNT\",\n" +
+                "    \"currency\": \"USD\",\n" +
+                "    \"partyRoles\": [\n" +
+                "      {\n" +
+                "        \"roleType\": \"Primary\",\n" +
+                "        \"grid\": \"G001\"\n" +
+                "      },\n" +
+                "      {\n" +
+                "        \"roleType\": \"Secondary\",\n" +
+                "        \"grid\": \"G002\"\n" +
+                "      }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "}";
+
+        // =====================================================
+        // NEW JSON
+        // =====================================================
+
+        String newJsonStr =
+                "{\n" +
+                "  \"account\": {\n" +
+                "    \"accountId\": \"20034667\",\n" +
+                "    \"type\": \"PARTY-CASH-ACCOUNT\",\n" +
+                "    \"currency\": \"EUR\",\n" +
+                "    \"partyRoles\": [\n" +
+                "      {\n" +
+                "        \"roleType\": \"Primary\",\n" +
+                "        \"grid\": \"G009\"\n" +
+                "      },\n" +
+                "      {\n" +
+                "        \"roleType\": \"Tertiary\",\n" +
+                "        \"grid\": \"G777\"\n" +
+                "      }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "}";
+
+        // =====================================================
+        // PARSE JSON
+        // =====================================================
+
+        JsonNode oldJson =
+                OM.readTree(oldJsonStr);
+
+        JsonNode newJson =
+                OM.readTree(newJsonStr);
+
+        // =====================================================
+        // CALL DIFF
+        // =====================================================
+
+        JsonMerkleDiffResult result =
+                JsonMerkleDiff.diff(oldJson, newJson);
+
+        result.calculateSummary();
+
+        // =====================================================
+        // PRINT ROOT HASHES
+        // =====================================================
+
+        System.out.println(
+                "OLD ROOT HASH : "
+                        + result.oldRootHash
+        );
+
+        System.out.println(
+                "NEW ROOT HASH : "
+                        + result.newRootHash
+        );
+
+        // =====================================================
+        // PRINT SUMMARY
+        // =====================================================
+
+        System.out.println("\n=== SUMMARY ===");
+
+        System.out.println(
+                "Added   : " + result.addedCount
+        );
+
+        System.out.println(
+                "Removed : " + result.removedCount
+        );
+
+        System.out.println(
+                "Changed : " + result.changedCount
+        );
+
+        System.out.println(
+                "Total   : " + result.totalChanges()
+        );
+
+        // =====================================================
+        // PRINT DIFFS
+        // =====================================================
+
+        System.out.println("\n=== DIFFS ===");
+
+        for (JsonDiffEntry d : result.diffs) {
+
+            System.out.println(
+                    d.getType()
+                            + " : "
+                            + d.getPath()
+            );
+
+            if (d.getOldValue() != null) {
+
+                System.out.println(
+                        "   OLD : "
+                                + d.getOldValue()
+                );
+            }
+
+            if (d.getNewValue() != null) {
+
+                System.out.println(
+                        "   NEW : "
+                                + d.getNewValue()
+                );
+            }
+
+            System.out.println(
+                    "   OLD HASH : "
+                            + d.getOldHash()
+            );
+
+            System.out.println(
+                    "   NEW HASH : "
+                            + d.getNewHash()
+            );
+
+            System.out.println();
+        }
+
+        // =====================================================
+        // PRINT COLLAPSED PATHS
+        // =====================================================
+
+        System.out.println(
+                "\n=== COLLAPSED CHANGED PATHS ==="
+        );
+
+        for (String p : result.collapsedChangedPaths) {
+            System.out.println(p);
+        }
+
+        // =====================================================
+        // PRINT FINAL RESULT OBJECT
+        // =====================================================
+
+        System.out.println(
+                "\n=== RESULT OBJECT ==="
+        );
+
+        System.out.println(result);
+    }
+}
