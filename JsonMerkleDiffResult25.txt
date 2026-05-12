@@ -1,0 +1,283 @@
+package com.example.merkle.json;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Final CMF style result
+ *
+ * Structure:
+ *
+ * {
+ *   "cmfChangeLog": {
+ *      "added": {
+ *          "paths": [],
+ *          "values": {}
+ *      },
+ *      "removed": {
+ *          "paths": [],
+ *          "values": {}
+ *      },
+ *      "changed": {
+ *          "paths": [],
+ *          "oldValues": {},
+ *          "newValues": {}
+ *      },
+ *      "summary": {}
+ *   }
+ * }
+ */
+public class JsonMerkleDiffResult {
+
+    // =====================================================
+    // ROOT
+    // =====================================================
+
+    private Map<String, Object> cmfChangeLog =
+            new LinkedHashMap<String, Object>();
+
+    // =====================================================
+    // CONSTRUCTOR
+    // =====================================================
+
+    public JsonMerkleDiffResult() {
+
+        // ---------------------------------------------
+        // added
+        // ---------------------------------------------
+
+        cmfChangeLog.put(
+                "added",
+                createSimpleBucket()
+        );
+
+        // ---------------------------------------------
+        // removed
+        // ---------------------------------------------
+
+        cmfChangeLog.put(
+                "removed",
+                createSimpleBucket()
+        );
+
+        // ---------------------------------------------
+        // changed
+        // ---------------------------------------------
+
+        cmfChangeLog.put(
+                "changed",
+                createChangedBucket()
+        );
+
+        // ---------------------------------------------
+        // summary
+        // ---------------------------------------------
+
+        cmfChangeLog.put(
+                "summary",
+                new LinkedHashMap<String, Object>()
+        );
+    }
+
+    // =====================================================
+    // SIMPLE BUCKET
+    // =====================================================
+
+    private Map<String, Object> createSimpleBucket() {
+
+        Map<String, Object> m =
+                new LinkedHashMap<String, Object>();
+
+        m.put(
+                "paths",
+                new ArrayList<String>()
+        );
+
+        m.put(
+                "values",
+                new LinkedHashMap<String, Object>()
+        );
+
+        return m;
+    }
+
+    // =====================================================
+    // CHANGED BUCKET
+    // =====================================================
+
+    private Map<String, Object> createChangedBucket() {
+
+        Map<String, Object> m =
+                new LinkedHashMap<String, Object>();
+
+        m.put(
+                "paths",
+                new ArrayList<String>()
+        );
+
+        m.put(
+                "oldValues",
+                new LinkedHashMap<String, Object>()
+        );
+
+        m.put(
+                "newValues",
+                new LinkedHashMap<String, Object>()
+        );
+
+        return m;
+    }
+
+    // =====================================================
+    // GET ROOT
+    // =====================================================
+
+    public Map<String, Object> getCmfChangeLog() {
+        return cmfChangeLog;
+    }
+
+    public void setCmfChangeLog(
+            Map<String, Object> cmfChangeLog
+    ) {
+        this.cmfChangeLog = cmfChangeLog;
+    }
+
+    // =====================================================
+    // ADD ADDED
+    // =====================================================
+
+    @SuppressWarnings("unchecked")
+    public void addAdded(
+            String path,
+            String leaf,
+            Object value
+    ) {
+
+        Map<String, Object> added =
+                (Map<String, Object>)
+                        cmfChangeLog.get("added");
+
+        // paths
+        ((List<String>)
+                added.get("paths"))
+                .add(path);
+
+        // values
+        ((Map<String, Object>)
+                added.get("values"))
+                .put(leaf, value);
+    }
+
+    // =====================================================
+    // ADD REMOVED
+    // =====================================================
+
+    @SuppressWarnings("unchecked")
+    public void addRemoved(
+            String path,
+            String leaf,
+            Object value
+    ) {
+
+        Map<String, Object> removed =
+                (Map<String, Object>)
+                        cmfChangeLog.get("removed");
+
+        // paths
+        ((List<String>)
+                removed.get("paths"))
+                .add(path);
+
+        // values
+        ((Map<String, Object>)
+                removed.get("values"))
+                .put(leaf, value);
+    }
+
+    // =====================================================
+    // ADD CHANGED
+    // =====================================================
+
+    @SuppressWarnings("unchecked")
+    public void addChanged(
+            String path,
+            String leaf,
+            Object oldValue,
+            Object newValue
+    ) {
+
+        Map<String, Object> changed =
+                (Map<String, Object>)
+                        cmfChangeLog.get("changed");
+
+        // paths
+        ((List<String>)
+                changed.get("paths"))
+                .add(path);
+
+        // old values
+        ((Map<String, Object>)
+                changed.get("oldValues"))
+                .put(leaf, oldValue);
+
+        // new values
+        ((Map<String, Object>)
+                changed.get("newValues"))
+                .put(leaf, newValue);
+    }
+
+    // =====================================================
+    // BUILD SUMMARY
+    // =====================================================
+
+    @SuppressWarnings("unchecked")
+    public void buildSummary() {
+
+        int added =
+                ((List<String>)
+                        ((Map<String, Object>)
+                                cmfChangeLog.get("added"))
+                                .get("paths"))
+                        .size();
+
+        int removed =
+                ((List<String>)
+                        ((Map<String, Object>)
+                                cmfChangeLog.get("removed"))
+                                .get("paths"))
+                        .size();
+
+        int changed =
+                ((List<String>)
+                        ((Map<String, Object>)
+                                cmfChangeLog.get("changed"))
+                                .get("paths"))
+                        .size();
+
+        int total =
+                added + removed + changed;
+
+        Map<String, Object> summary =
+                (Map<String, Object>)
+                        cmfChangeLog.get("summary");
+
+        summary.put("added", added);
+        summary.put("removed", removed);
+        summary.put("changed", changed);
+        summary.put("total", total);
+    }
+
+    // =====================================================
+    // STRING
+    // =====================================================
+
+    @Override
+    public String toString() {
+
+        return "JsonMerkleDiffResult{" +
+                "cmfChangeLog=" + cmfChangeLog +
+                '}';
+    }
+}
