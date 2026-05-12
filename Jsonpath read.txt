@@ -1,0 +1,48 @@
+private Object read(
+    Object json,
+    String path
+) {
+
+    try {
+
+        // ============================================
+        // STRING JSON
+        // ============================================
+
+        if (json instanceof String) {
+
+            String s =
+                ((String) json).trim();
+
+            if (s.isEmpty()) {
+                return null;
+            }
+
+            return JsonPath.read(s, path);
+        }
+
+        // ============================================
+        // JACKSON JSON NODE
+        // ============================================
+
+        if (json instanceof JsonNode) {
+
+            String s =
+                ((JsonNode) json).toString();
+
+            return JsonPath.read(s, path);
+        }
+
+        // ============================================
+        // MAP / LIST
+        // ============================================
+
+        return JsonPath.read(json, path);
+
+    }
+
+    catch (Exception e) {
+
+        return null;
+    }
+}
