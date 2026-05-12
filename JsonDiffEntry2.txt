@@ -1,0 +1,185 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+/**
+ * Single JSON diff entry
+ */
+public class JsonDiffEntry {
+
+    public enum Type {
+        ADDED,
+        REMOVED,
+        CHANGED
+    }
+
+    private Type type;
+
+    // semantic normalized path
+    private String path;
+
+    // values
+    private JsonNode oldValue;
+    private JsonNode newValue;
+
+    // hashes
+    private String oldHash;
+    private String newHash;
+
+    // semantic metadata
+    private String semanticTag;
+
+    // optional grouping
+    private String domainKey;
+
+    // entity identifiers
+    private String entityId;
+    private String entityType;
+
+    // =====================================================
+    // CONSTRUCTOR
+    // =====================================================
+
+    public JsonDiffEntry(
+            Type type,
+            String path,
+            JsonNode oldValue,
+            JsonNode newValue
+    ) {
+        this.type = type;
+        this.path = path;
+        this.oldValue = oldValue;
+        this.newValue = newValue;
+    }
+
+    // =====================================================
+    // GETTERS / SETTERS
+    // =====================================================
+
+    public Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = path;
+    }
+
+    public JsonNode getOldValue() {
+        return oldValue;
+    }
+
+    public void setOldValue(JsonNode oldValue) {
+        this.oldValue = oldValue;
+    }
+
+    public JsonNode getNewValue() {
+        return newValue;
+    }
+
+    public void setNewValue(JsonNode newValue) {
+        this.newValue = newValue;
+    }
+
+    public String getOldHash() {
+        return oldHash;
+    }
+
+    public void setOldHash(String oldHash) {
+        this.oldHash = oldHash;
+    }
+
+    public String getNewHash() {
+        return newHash;
+    }
+
+    public void setNewHash(String newHash) {
+        this.newHash = newHash;
+    }
+
+    public String getSemanticTag() {
+        return semanticTag;
+    }
+
+    public void setSemanticTag(String semanticTag) {
+        this.semanticTag = semanticTag;
+    }
+
+    public String getDomainKey() {
+        return domainKey;
+    }
+
+    public void setDomainKey(String domainKey) {
+        this.domainKey = domainKey;
+    }
+
+    public String getEntityId() {
+        return entityId;
+    }
+
+    public void setEntityId(String entityId) {
+        this.entityId = entityId;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public void setEntityType(String entityType) {
+        this.entityType = entityType;
+    }
+
+    // =====================================================
+    // HELPER METHODS
+    // =====================================================
+
+    public boolean isAdded() {
+        return type == Type.ADDED;
+    }
+
+    public boolean isRemoved() {
+        return type == Type.REMOVED;
+    }
+
+    public boolean isChanged() {
+        return type == Type.CHANGED;
+    }
+
+    // =====================================================
+    // STRING
+    // =====================================================
+
+    @Override
+    public String toString() {
+
+        return "JsonDiffEntry{" +
+                "type=" + type +
+                ", path='" + path + '\'' +
+                ", oldValue=" + shortValue(oldValue) +
+                ", newValue=" + shortValue(newValue) +
+                ", semanticTag='" + semanticTag + '\'' +
+                ", entityId='" + entityId + '\'' +
+                ", entityType='" + entityType + '\'' +
+                '}';
+    }
+
+    private String shortValue(JsonNode node) {
+
+        if (node == null) {
+            return "null";
+        }
+
+        String s = node.toString();
+
+        return s.length() > 80
+                ? s.substring(0, 80) + "..."
+                : s;
+    }
+}
