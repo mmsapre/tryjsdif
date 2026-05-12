@@ -1,0 +1,453 @@
+package com.example.merkle.json;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.*;
+
+/**
+ * Generic JSON Merkle diff
+ *
+ * No domain-specific values.
+ * Everything inferred dynamically.
+ */
+public class JsonMerkleDiff {
+
+    private static final ObjectMapper OM =
+            new ObjectMapper();
+
+    // =====================================================
+    // MAIN DIFF
+    // =====================================================
+
+    public static JsonMerkleDiffResult diff(
+            JsonNode oldJson,
+            JsonNode newJson
+    ) throws Exception {
+
+        JsonMerkleDiffResult result =
+                new JsonMerkleDiffResult();
+
+        Map<String, JsonNode> oldFlat =
+                new LinkedHashMap<String, JsonNode>();
+
+        Map<String, JsonNode> newFlat =
+                new LinkedHashMap<String, JsonNode>();
+
+        flatten(oldJson, "", oldFlat);
+        flatten(newJson, "", newFlat);
+
+        Set<String> allPaths =
+                new LinkedHashSet<String>();
+
+        allPaths.addAll(oldFlat.keySet());
+        allPaths.addAll(newFlat.keySet());
+
+        // ---------------------------------------------
+        // generic entity identifiers
+        // ---------------------------------------------
+
+        Map<String, Object> entityIds =
+                extractEntityIds(newJson);
+
+        // ---------------------------------------------
+        // diff
+        // ---------------------------------------------
+
+        for (String path : allPaths) {
+
+            JsonNode oldVal = oldFlat.get(path);
+            JsonNode newVal = newFlat.get(path);
+
+            // =========================================
+            // ADDED
+            // =========================================
+
+            if (oldVal == null && newVal != null) {
+
+                Map<String, Object> item =
+                        buildItem(
+                                path,
+                                null,
+                                newVal,
+                                entityIds
+                        );
+
+                result.addAdded(item);
+            }
+
+            // =========================================
+            // REMOVED
+            // =========================================
+
+            else if (oldVal != null && newVal == null) {
+
+                Map<String, Object> item =
+                        buildItem(
+                                path,
+                                oldVal,
+                                null,
+                                entityIds
+                        );
+
+                result.addRemoved(item);
+            }
+
+            // =========================================
+            // CHANGED
+            // =========================================
+
+            else if (
+                    oldVal != null
+                    && newVal != null
+                    && !canonical(oldVal)
+                    .equals(canonical(newVal))
+            ) {
+
+                Map<String, Object> item =
+                        buildItem(
+                                path,
+                                oldVal,
+                                newVal,
+                                entityIds
+                        );
+
+                item.put(
+                        "oldHash",
+                        sha256(canonical(oldVal))
+                );
+
+                item.put(
+                        "newHash",
+                        sha256(canonical(newVal))
+                );
+
+                result.addChanged(item);
+            }
+        }
+
+        result.buildSummary();
+
+        return result;
+    }
+
+    // =====================================================
+    // BUILD ITEM
+    // =====================================================
+
+    private static Map<String, Object> buildItem(
+            String path,
+            JsonNode oldVal,
+            JsonNode newVal,
+            Map<String, Object> entityIds
+    ) throws Exception {
+
+        Map<String, Object> item =
+                new LinkedHashMap<String, Object>();
+
+        // ---------------------------------------------
+        // KeyFields
+        // ---------------------------------------------
+
+        item.put("KeyFields", entityIds);
+
+        // ---------------------------------------------
+        // domainKeys (generic empty)
+        // ---------------------------------------------
+
+        item.put(
+                "domainKeys",
+                new ArrayList<String>()
+        );
+
+        // ---------------------------------------------
+        // paths
+        // ---------------------------------------------
+
+        List<String> paths =
+                new ArrayList<String>();
+
+        paths.add(path);
+
+        item.put("paths", paths);
+
+        // ---------------------------------------------
+        // old values
+        // ---------------------------------------------
+
+        if (oldVal != null) {
+
+            Map<String, Object> oldValues =
+                    new LinkedHashMap<String, Object>();
+
+            oldValues.put(
+                    getLeafName(path),
+                    jsonToObject(oldVal)
+            );
+
+            item.put("oldValues", oldValues);
+        }
+
+        // ---------------------------------------------
+        // new values
+        // ---------------------------------------------
+
+        if (newVal != null) {
+
+            Map<String, Object> newValues =
+                    new LinkedHashMap<String, Object>();
+
+            newValues.put(
+                    getLeafName(path),
+                    jsonToObject(newVal)
+            );
+
+            item.put("newValues", newValues);
+        }
+
+        return item;
+    }
+
+    // =====================================================
+    // GENERIC ENTITY IDS
+    // =====================================================
+
+    private static Map<String, Object> extractEntityIds(
+            JsonNode json
+    ) {
+
+        Map<String, Object> ids =
+                new LinkedHashMap<String, Object>();
+
+        extractIdsRecursive(
+                json,
+                "",
+                ids
+        );
+
+        return ids;
+    }
+
+    private static void extractIdsRecursive(
+            JsonNode node,
+            String path,
+            Map<String, Object> out
+    ) {
+
+        if (node == null) {
+            return;
+        }
+
+        // OBJECT
+        if (node.isObject()) {
+
+            Iterator<String> fields =
+                    node.fieldNames();
+
+            while (fields.hasNext()) {
+
+                String f = fields.next();
+
+                JsonNode v = node.get(f);
+
+                if (
+                        isIdLike(f)
+                        && v.isValueNode()
+                ) {
+
+                    out.put(
+                            f,
+                            v.asText()
+                    );
+                }
+
+                extractIdsRecursive(
+                        v,
+                        path + "/" + f,
+                        out
+                );
+            }
+        }
+
+        // ARRAY
+        else if (node.isArray()) {
+
+            for (int i = 0; i < node.size(); i++) {
+
+                extractIdsRecursive(
+                        node.get(i),
+                        path + "[" + i + "]",
+                        out
+                );
+            }
+        }
+    }
+
+    private static boolean isIdLike(
+            String field
+    ) {
+
+        String f =
+                field.toLowerCase();
+
+        return
+                f.equals("id")
+                || f.endsWith("id")
+                || f.contains("identifier")
+                || f.endsWith("key")
+                || f.endsWith("code")
+                || f.contains("uuid");
+    }
+
+    // =====================================================
+    // FLATTEN
+    // =====================================================
+
+    private static void flatten(
+            JsonNode node,
+            String path,
+            Map<String, JsonNode> out
+    ) {
+
+        if (node == null) {
+            return;
+        }
+
+        // OBJECT
+        if (node.isObject()) {
+
+            Iterator<String> fields =
+                    node.fieldNames();
+
+            while (fields.hasNext()) {
+
+                String f = fields.next();
+
+                flatten(
+                        node.get(f),
+                        path + "/" + f,
+                        out
+                );
+            }
+        }
+
+        // ARRAY
+        else if (node.isArray()) {
+
+            for (int i = 0; i < node.size(); i++) {
+
+                flatten(
+                        node.get(i),
+                        path + "[" + i + "]",
+                        out
+                );
+            }
+        }
+
+        // VALUE
+        else {
+
+            out.put(path, node);
+        }
+    }
+
+    // =====================================================
+    // HASH
+    // =====================================================
+
+    private static String sha256(
+            String val
+    ) throws Exception {
+
+        MessageDigest md =
+                MessageDigest.getInstance("SHA-256");
+
+        byte[] bytes =
+                md.digest(
+                        val.getBytes(
+                                StandardCharsets.UTF_8
+                        )
+                );
+
+        StringBuilder sb =
+                new StringBuilder();
+
+        for (byte b : bytes) {
+
+            sb.append(
+                    String.format("%02x", b)
+            );
+        }
+
+        return sb.toString();
+    }
+
+    // =====================================================
+    // CANONICAL
+    // =====================================================
+
+    private static String canonical(
+            JsonNode node
+    ) {
+
+        if (node == null) {
+            return "null";
+        }
+
+        if (node.isValueNode()) {
+            return node.asText();
+        }
+
+        return node.toString();
+    }
+
+    // =====================================================
+    // LEAF NAME
+    // =====================================================
+
+    private static String getLeafName(
+            String path
+    ) {
+
+        int idx =
+                path.lastIndexOf("/");
+
+        if (idx < 0) {
+            return path;
+        }
+
+        return path.substring(idx + 1);
+    }
+
+    // =====================================================
+    // JSON TO OBJECT
+    // =====================================================
+
+    private static Object jsonToObject(
+            JsonNode node
+    ) throws Exception {
+
+        if (node == null) {
+            return null;
+        }
+
+        if (node.isTextual()) {
+            return node.asText();
+        }
+
+        if (node.isBoolean()) {
+            return node.booleanValue();
+        }
+
+        if (node.isNumber()) {
+            return node.numberValue();
+        }
+
+        return OM.readValue(
+                node.toString(),
+                Object.class
+        );
+    }
+}
